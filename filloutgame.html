@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可変サイズ 反転パズル ゲーム</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 20px;
+            color: #333;
+        }
+        #status-label {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        #moves-label {
+            font-size: 20px;
+            font-weight: bold;
+            color: blue;
+            margin-bottom: 15px;
+        }
+        .section-box {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: -20px;
+            background: white;
+            display: inline-block;
+            padding: 0 5px;
+            color: #555;
+        }
+        .radio-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        button {
+            cursor: pointer;
+            border: 1px solid #aaa;
+            border-radius: 5px;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+        /* 難易度ボタンの色 */
+        #btn-easy { background-color: #ccffcc; }
+        #btn-normal { background-color: #ffffcc; }
+        #btn-hard { background-color: #ffcccc; }
+        #btn-super { background-color: #ff99cc; }
+        #btn-god { background-color: #cc99ff; }
+        
+        #btn-reset {
+            background-color: #ffddaa;
+            font-size: 14px;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* 盤面 */
+        #grid-container {
+            display: grid;
+            gap: 2px;
+            margin: 20px auto;
+            justify-content: center;
+            background-color: #333;
+            padding: 2px;
+            border: 2px solid #333;
+        }
+        .cell {
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: blue;
+            transition: background-color 0.2s;
+        }
+        .cell.active {
+            background-color: #ff9999;
+        }
+
+        /* 十字キー操作盤 */
+        .controls {
+            display: grid;
+            grid-template-columns: 50px 50px 50px;
+            grid-template-rows: 50px 50px;
+            gap: 5px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .controls button {
+            background-color: #eee;
+            font-size: 14px;
+            padding: 0;
+        }
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
+        .hint {
+            font-size: 12px;
+            color: gray;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>可変サイズ 反転パズル ゲーム</h1>
+    
+    <div id="status-label">サイズと難易度を選んでスタートしてください</div>
+    <div id="moves-label">残り手数: -</div>
+
+    <div class="section-box">
+        <div class="section-title">盤面サイズ (新規ゲーム時適用)</div>
+        <div class="radio-group" id="size-selectors">
+            </div>
+    </div>
+
+    <div class="section-box">
+        <div class="section-title">難易度選択 (新規ゲーム)</div>
+        <div class="btn-group">
+            <button id="btn-easy" onclick="startGame(8)">初級</button>
+            <button id="btn-normal" onclick="startGame(15)">中級</button>
+            <button id="btn-hard" onclick="startGame(22)">上級</button>
+        </div>
+        <div class="btn-group">
+            <button id="btn-super" onclick="startGame(27)">超級</button>
+            <button id="btn-god" onclick="startGame(30)">神級</button>
+        </div>
+    </div>
+
+    <div id="grid-container"></div>
+
+    <button id="btn-reset" onclick="resetGame()">🔄 この問題を最初からやり直す (リセット)</button>
+
+    <div class="hint">
+        【操作方法】<br>
+        画面のボタン、またはキーボードの矢印キーで移動<br>
+        ※直前の移動の逆方向（Uターン）はできません
+    </div>
+
+    <div class="controls">
+        <button id="btn-up" onclick="attemptMove('Up')">▲</button>
+        <button id="btn-left" onclick="attemptMove('Left')">◀</button>
+        <button id="btn-down" onclick="attemptMove('Down')">▼</button>
+        <button id="btn-right" onclick="attemptMove('Right')">▶</button>
+    </div>
+</div>
+
+<script>
+    // ゲームの状態管理
+    let gridSize = 5;
+    let gridData = [];
+    let playerPos = [2, 2];
+    let movesLeft = 0;
+    let lastMove = null;
+    let isPlaying = false;
+    
+    let initialGridData = [];
+    let initialPlayerPos = [];
+    let initialMoves = 0;
+
+    const opposites = {'Up': 'Down', 'Down': 'Up', 'Left': 'Right', 'Right': 'Left'};
+    const moveMap = {'Up': [-1, 0], 'Down': [1, 0], 'Left': [0, -1], 'Right': [0, 1]};
+
+    // 初期化処理
+    window.onload = () => {
+        setupSizeSelectors();
+        updateDifficultyButtons();
+        buildGridUI();
+        
+        // キーボードイベントの追加
+        document.addEventListener('keydown', (e) => {
+            if (!isPlaying) return;
+            switch(e.key) {
+                case 'ArrowUp': attemptMove('Up'); e.preventDefault(); break;
+                case 'ArrowDown': attemptMove('Down'); e.preventDefault(); break;
+                case 'ArrowLeft': attemptMove('Left'); e.preventDefault(); break;
+                case 'ArrowRight': attemptMove('Right'); e.preventDefault(); break;
+            }
+        });
+    };
+
+    function setupSizeSelectors() {
+        const container = document.getElementById('size-selectors');
+        for (let i = 5; i <= 9; i++) {
+            const label = document.createElement('label');
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'gridSize';
+            radio.value = i;
+            if (i === 5) radio.checked = true;
+            
+            radio.addEventListener('change', (e) => {
+                gridSize = parseInt(e.target.value);
+                updateDifficultyButtons();
+            });
+
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(`${i}x${i}`));
+            container.appendChild(label);
+        }
+    }
+
+    function getActualSteps(baseSteps) {
+        const ratio = (gridSize * gridSize) / 25.0;
+        return Math.round(baseSteps * ratio);
+    }
+
+    function updateDifficultyButtons() {
+        document.getElementById('btn-easy').innerText = `初級 (${getActualSteps(8)}手)`;
+        document.getElementById('btn-normal').innerText = `中級 (${getActualSteps(15)}手)`;
+        document.getElementById('btn-hard').innerText = `上級 (${getActualSteps(22)}手)`;
+        document.getElementById('btn-super').innerText = `超級 (${getActualSteps(27)}手)`;
+        document.getElementById('btn-god').innerText = `神級 (${getActualSteps(30)}手)`;
+    }
+
+    function buildGridUI() {
+        const container = document.getElementById('grid-container');
+        container.innerHTML = '';
+        
+        // CSS Gridの設定
+        container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+        container.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+        
+        // セルサイズの調整
+        let cellSize = gridSize <= 6 ? '50px' : (gridSize <= 7 ? '40px' : '30px');
+        let fontSize = gridSize <= 6 ? '24px' : '18px';
+
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${r}-${c}`;
+                cell.style.width = cellSize;
+                cell.style.height = cellSize;
+                cell.style.fontSize = fontSize;
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    function generateBoard(steps) {
+        let grid = Array.from({length: gridSize}, () => Array(gridSize).fill(0));
+        let r = Math.floor(Math.random() * gridSize);
+        let c = Math.floor(Math.random() * gridSize);
+        let lastGenMove = null;
+        
+        const directions = [
+            {dr: -1, dc: 0, name: 'Up'},
+            {dr: 1, dc: 0, name: 'Down'},
+            {dr: 0, dc: -1, name: 'Left'},
+            {dr: 0, dc: 1, name: 'Right'}
+        ];
+
+        for (let i = 0; i < steps; i++) {
+            grid[r][c] = 1 - grid[r][c];
+            let validMoves = [];
+            
+            for (let dir of directions) {
+                if (lastGenMove && dir.name === opposites[lastGenMove]) continue;
+                let nr = r + dir.dr;
+                let nc = c + dir.dc;
+                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
+                    validMoves.push(dir);
+                }
+            }
+            
+            if (validMoves.length === 0) break;
+            
+            let move = validMoves[Math.floor(Math.random() * validMoves.length)];
+            r += move.dr;
+            c += move.dc;
+            lastGenMove = move.name;
+        }
+
+        return {grid: grid, pos: [r, c]};
+    }
+
+    function startGame(baseSteps) {
+        const actualSteps = getActualSteps(baseSteps);
+        buildGridUI();
+
+        const generated = generateBoard(actualSteps);
+        gridData = generated.grid;
+        playerPos = generated.pos;
+        
+        movesLeft = actualSteps;
+        lastMove = null;
+        isPlaying = true;
+        
+        // 初期状態をディープコピーで保存
+        initialGridData = gridData.map(row => [...row]);
+        initialPlayerPos = [...playerPos];
+        initialMoves = actualSteps;
+
+        const statusLabel = document.getElementById('status-label');
+        statusLabel.innerText = `ゲームスタート！ (サイズ:${gridSize}x${gridSize})`;
+        statusLabel.style.color = 'black';
+        
+        updateGridUI();
+    }
+
+    function resetGame() {
+        if (initialGridData.length === 0) return;
+
+        gridData = initialGridData.map(row => [...row]);
+        playerPos = [...initialPlayerPos];
+        movesLeft = initialMoves;
+        lastMove = null;
+        isPlaying = true;
+
+        const statusLabel = document.getElementById('status-label');
+        statusLabel.innerText = "リセットしました。再スタート！";
+        statusLabel.style.color = 'blue';
+
+        updateGridUI();
+    }
+
+    function attemptMove(moveName) {
+        if (!isPlaying) return;
+
+        if (lastMove && moveName === opposites[lastMove]) return;
+
+        let dr = moveMap[moveName][0];
+        let dc = moveMap[moveName][1];
+        let nr = playerPos[0] + dr;
+        let nc = playerPos[1] + dc;
+
+        if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
+            playerPos = [nr, nc];
+            gridData[nr][nc] = 1 - gridData[nr][nc];
+            lastMove = moveName;
+            movesLeft--;
+
+            updateGridUI();
+            checkGameEnd();
+        }
+    }
+
+    function checkGameEnd() {
+        let flatGrid = gridData.flat();
+        let allZero = flatGrid.every(c => c === 0);
+        let allOne = flatGrid.every(c => c === 1);
+
+        const statusLabel = document.getElementById('status-label');
+
+        if (allZero || allOne) {
+            isPlaying = false;
+            statusLabel.innerText = "🎉 クリアおめでとうございます！ 🎉";
+            statusLabel.style.color = "red";
+            setTimeout(() => alert("クリア！\nパズルを解きました！"), 100);
+            return;
+        }
+
+        if (movesLeft <= 0) {
+            isPlaying = false;
+            statusLabel.innerText = "ゲームオーバー";
+            statusLabel.style.color = "gray";
+            setTimeout(() => alert("ゲームオーバー\n指定手数以内に解けませんでした。\nリセットボタンで再挑戦できます！"), 100);
+        }
+    }
+
+    function updateGridUI() {
+        document.getElementById('moves-label').innerText = `残り手数: ${movesLeft}`;
+
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                const cell = document.getElementById(`cell-${r}-${c}`);
+                
+                if (gridData[r][c] === 1) {
+                    cell.classList.add('active');
+                } else {
+                    cell.classList.remove('active');
+                }
+
+                if (r === playerPos[0] && c === playerPos[1]) {
+                    cell.innerText = "★";
+                } else {
+                    cell.innerText = "";
+                }
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
